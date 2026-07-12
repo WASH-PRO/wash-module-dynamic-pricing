@@ -5,7 +5,7 @@
     "ru": "Повышает цены постов при высокой занятости автомойки и возвращает исходные при снижении нагрузки.",
     "en": "Raises post prices when the car wash is busy and restores originals when occupancy drops."
   },
-  "version": "1.0.0",
+  "version": "1.0.1",
   "author": "WASH-PRO",
   "license": "MIT",
   "category": "automation",

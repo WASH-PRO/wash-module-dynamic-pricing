@@ -124,9 +124,16 @@
           <span class="wm-field-hint">${WashModule.t({ ru: 'Оставьте пустым, чтобы не менять сохранённый пароль.', en: 'Leave empty to keep the saved password.' })}</span>
         </div>`,
       collectSettings(form) {
+        const washId = String(form.wash_id.value || '').trim();
+        if (!washId) {
+          throw new Error(WashModule.t({
+            ru: 'Выберите автомойку перед сохранением.',
+            en: 'Select a car wash before saving.',
+          }));
+        }
         const password = String(form.api_password.value || '').trim();
         const settings = {
-          wash_id: String(form.wash_id.value || '').trim(),
+          wash_id: washId,
           busy_threshold: Number(form.busy_threshold.value),
           price_increase_percent: Number(form.price_increase_percent.value),
           poll_interval: Number(form.poll_interval.value),
@@ -169,6 +176,9 @@
         if (!snap) {
           return `<div class="wm-empty">${WashModule.escapeHtml(WashModule.t({ ru: 'Нет снимка — запустите модуль.', en: 'No snapshot yet — start the module.' }))}</div>`;
         }
+        const configWarning = snap.lastEvent === 'config_missing' || snap.configError
+          ? `<div class="wm-alert wm-alert--error" style="margin-bottom:1rem">${WashModule.escapeHtml(snap.configError || WashModule.t({ ru: 'Автомойка не выбрана. Откройте вкладку «Настройки», выберите автомойку и сохраните.', en: 'Car wash is not selected. Open Settings, choose a car wash, and save.' }))}</div>`
+          : '';
         const events = Array.isArray(snap.recentEvents) ? snap.recentEvents : [];
         const eventsHtml = events.length
           ? `<ul class="wm-list">${events.slice().reverse().map(function (e) {
@@ -179,6 +189,7 @@
           ? WashModule.t({ ru: 'Повышение активно', en: 'Surge active' })
           : WashModule.t({ ru: 'Базовые цены', en: 'Base prices' });
         return `
+          ${configWarning}
           <h2 class="wm-section-title">${WashModule.t({ ru: 'Статус', en: 'Status' })}</h2>
           <p>${WashModule.escapeHtml(status)} · ${WashModule.escapeHtml(String(snap.busyPosts ?? 0))}/${WashModule.escapeHtml(String(snap.totalPosts ?? 0))} ${WashModule.t({ ru: 'постов занято', en: 'posts busy' })}</p>
           <h2 class="wm-section-title" style="margin-top:1rem">${WashModule.t({ ru: 'События', en: 'Events' })}</h2>
