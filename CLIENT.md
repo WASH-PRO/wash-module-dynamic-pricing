@@ -1,28 +1,30 @@
-# Внедрение на стороне автомойки (панель / ETH-модуль)
+**Language:** **English** · [Русский](CLIENT.ru.md)
 
-Модуль **Динамические цены** CRM не меняет прайс-лист. Он публикует в MQTT **коэффициент списания**, который действует **до обнуления баланса** текущей сессии клиента.
+# Car wash integration (panel / ETH module)
 
-Публикация идёт от учётной записи CRM **`system`** (полный ACL) через `message-processor`:
+The **Dynamic Pricing** CRM module does not change the price list. It publishes an MQTT **debit coefficient** that applies **until the current session balance reaches zero**.
+
+Messages are published by the CRM **`system`** account (full ACL) via `message-processor`:
 
 ```
 {dt_pref}/{serial_number}/set/surge
 ```
 
-Пример топика: `washpro/WP-001/set/surge`
+Example topic: `washpro/WP-001/set/surge`
 
 ---
 
-## 1. Подписка на топик
+## 1. Topic subscription
 
-Панель / контроллер поста должен подписаться на свой топик `set/surge` (как на `set/prices` и `set/command`).
+The panel / post controller must subscribe to its `set/surge` topic (same as `set/prices` and `set/command`).
 
-QoS рекомендуется **1**.
+Recommended QoS: **1**.
 
 ---
 
-## 2. Формат payload (CRM → устройство)
+## 2. Payload format (CRM → device)
 
-### Включить повышение
+### Enable surge
 
 ```json
 {
@@ -32,25 +34,25 @@ QoS рекомендуется **1**.
 }
 ```
 
-| Поле | Тип | Описание |
-|------|-----|----------|
-| `coefficient` | number | Множитель списания. `1.10` = +10% к расходу баланса |
-| `active` | 0 \| 1 | `1` — коэффициент принять, `0` — отключить для новых сессий |
-| `until_balance_zero` | 0 \| 1 | `1` — действует до `balance == 0`, затем автосброс на `1.0` |
+| Field | Type | Description |
+|-------|------|-------------|
+| `coefficient` | number | Debit multiplier. `1.10` = +10% balance consumption |
+| `active` | 0 \| 1 | `1` — apply coefficient, `0` — disable for new sessions |
+| `until_balance_zero` | 0 \| 1 | `1` — active until `balance == 0`, then auto-reset to `1.0` |
 
-Опционально (если в CRM включено подтверждение доставки):
+Optional (when delivery confirmation is enabled in CRM):
 
 ```json
 { "message_id": "uuid", "coefficient": 1.10, "active": 1, "until_balance_zero": 1 }
 ```
 
-Ответ на `set/ack` (рекомендуется):
+Recommended `set/ack` response:
 
 ```json
 { "kind": "surge", "status": "ok", "message_id": "uuid" }
 ```
 
-### Отключить повышение (занятость упала)
+### Disable surge (occupancy dropped)
 
 ```json
 {
@@ -60,125 +62,125 @@ QoS рекомендуется **1**.
 }
 ```
 
-- Новые клиенты — без повышения.
-- Текущая сессия с уже применённым коэффициентом **продолжает** по правилу `until_balance_zero` (до нуля баланса), если сессия уже началась.
+- New customers — no surge.
+- Current session with an applied coefficient **continues** under `until_balance_zero` (until balance zero) if the session already started.
 
 ---
 
-## 3. Логика на устройстве
+## 3. Device logic
 
-### Состояние (рекомендуемая модель)
+### State (recommended model)
 
 ```c
 struct SurgeState {
-  float pending_coefficient;   // для следующей сессии
-  float session_coefficient; // для текущей сессии
-  bool  session_active;      // until_balance_zero в работе
+  float pending_coefficient;   // for next session
+  float session_coefficient; // for current session
+  bool  session_active;      // until_balance_zero in effect
 };
 ```
 
-### При получении `set/surge`
+### On `set/surge` received
 
-1. Если `active == 0` или `coefficient <= 1.0`:
+1. If `active == 0` or `coefficient <= 1.0`:
    - `pending_coefficient = 1.0`
-   - **Не сбрасывать** `session_coefficient`, если `session_active == true` (текущий клиент до конца сессии).
-2. Если `active == 1` и `coefficient > 1.0`:
+   - **Do not reset** `session_coefficient` if `session_active == true` (current customer until end of session).
+2. If `active == 1` and `coefficient > 1.0`:
    - `pending_coefficient = coefficient`
-   - Если **баланс > 0** (клиент уже на посту) и `until_balance_zero == 1`:
+   - If **balance > 0** (customer already on post) and `until_balance_zero == 1`:
      - `session_coefficient = coefficient`
      - `session_active = true`
 
-### При зачислении оплаты (новая сессия)
+### On payment credited (new session)
 
-Когда баланс переходит `0 → сумма > 0` (наличные / безнал / карта):
+When balance goes `0 → amount > 0` (cash / card / contactless):
 
 ```
 session_coefficient = pending_coefficient
-session_active = (session_coefficient > 1.0 && until_balance_zero был 1)
+session_active = (session_coefficient > 1.0 && until_balance_zero was 1)
 ```
 
-### При списании за режим
+### On mode debit
 
-Для каждого режима с базовой ценой `price > 0`:
+For each mode with base price `price > 0`:
 
 ```
-charge = ceil(price * session_coefficient)   // или round по вашей бизнес-логике
+charge = ceil(price * session_coefficient)   // or round per your business logic
 balance -= charge
 ```
 
-Режимы с `price == 0` не умножать.
+Do not multiply modes with `price == 0`.
 
-### При обнулении баланса
+### On balance zero
 
-Когда `balance <= 0`:
+When `balance <= 0`:
 
 ```
 session_coefficient = 1.0
 session_active = false
-// pending_coefficient не трогать — для следующего клиента
+// do not change pending_coefficient — for next customer
 ```
 
-### Периодическая телеметрия
+### Periodic telemetry
 
-Продолжать публиковать `state/process` с полем `balance` — CRM использует его для мониторинга занятости. Коэффициент в `state/process` **не обязателен** (опционально для отладки: поле `surge_k`).
-
----
-
-## 4. Пример сценария
-
-| Шаг | Событие | Устройство |
-|-----|---------|------------|
-| 1 | Занято 9/10 постов | CRM шлёт `k=1.10, active=1` |
-| 2 | Клиент вносит 200 ₽ | `session_coefficient=1.10` |
-| 3 | Режим «Пена» 50 ₽ | Списание `55 ₽` |
-| 4 | Баланс = 0 | Автосброс `session_coefficient=1.0` |
-| 5 | Занято 6/10 | CRM шлёт `active=0` — новые клиенты без surge |
+Keep publishing `state/process` with `balance` — CRM uses it for occupancy monitoring. Coefficient in `state/process` is **optional** (debug field `surge_k`).
 
 ---
 
-## 5. NVS / MQTT (без изменений)
+## 4. Example scenario
 
-Пост по-прежнему подключается **своим** логином (`settings.mqttLogin`), не `system`.  
-Команды `set/surge` приходят от брокера от имени CRM — пост только **читает** свой топик.
+| Step | Event | Device |
+|------|-------|--------|
+| 1 | 9/10 posts busy | CRM sends `k=1.10, active=1` |
+| 2 | Customer pays 200 ₽ | `session_coefficient=1.10` |
+| 3 | Mode "Foam" 50 ₽ | Debit `55 ₽` |
+| 4 | Balance = 0 | Auto-reset `session_coefficient=1.0` |
+| 5 | 6/10 busy | CRM sends `active=0` — new customers without surge |
 
-Проверьте:
+---
 
-| NVS / настройка | Значение |
-|-----------------|----------|
+## 5. NVS / MQTT (unchanged)
+
+The post still connects with **its own** login (`settings.mqttLogin`), not `system`.  
+`set/surge` commands arrive from the broker on behalf of CRM — the post only **reads** its topic.
+
+Verify:
+
+| NVS / setting | Value |
+|---------------|-------|
 | `rm_en` | `1` |
-| `rm_addr` / `rm_port` | IP и порт CRM |
-| `dt_pref` | как в CRM (`washpro` по умолчанию) |
-| serial в топике | = `posts.serialNumber` в CRM |
+| `rm_addr` / `rm_port` | CRM IP and port |
+| `dt_pref` | same as CRM (`washpro` by default) |
+| serial in topic | = `posts.serialNumber` in CRM |
 
 ---
 
-## 6. Минимальный чеклист прошивки
+## 6. Firmware checklist
 
-- [ ] Подписка на `{dt_pref}/{serial}/set/surge`
-- [ ] Парсинг `coefficient`, `active`, `until_balance_zero`
-- [ ] Умножение списания при `session_coefficient > 1`
-- [ ] Сброс коэффициента при `balance <= 0`
-- [ ] Игнорирование `active=0` для уже начатой сессии (until zero)
-- [ ] (Опционально) `set/ack` с `kind: "surge"`
+- [ ] Subscribe to `{dt_pref}/{serial}/set/surge`
+- [ ] Parse `coefficient`, `active`, `until_balance_zero`
+- [ ] Multiply debits when `session_coefficient > 1`
+- [ ] Reset coefficient when `balance <= 0`
+- [ ] Ignore `active=0` for an already started session (until zero)
+- [ ] (Optional) `set/ack` with `kind: "surge"`
 
 ---
 
-## 7. Тест вручную (mosquitto_pub)
+## 7. Manual test (mosquitto_pub)
 
-С сервера CRM (логин `system`, пароль из **Настройки → MQTT (CRM)**):
+From the CRM server (`system` login, password from **Settings → MQTT (CRM)**):
 
 ```bash
-mosquitto_pub -h localhost -p 1883 -u system -P 'ПАРОЛЬ' -q 1 \
+mosquitto_pub -h localhost -p 1883 -u system -P 'PASSWORD' -q 1 \
   -t 'washpro/SERIAL/set/surge' \
   -m '{"coefficient":1.15,"active":1,"until_balance_zero":1}'
 ```
 
-Отключение:
+Disable:
 
 ```bash
-mosquitto_pub -h localhost -p 1883 -u system -P 'ПАРОЛЬ' -q 1 \
+mosquitto_pub -h localhost -p 1883 -u system -P 'PASSWORD' -q 1 \
   -t 'washpro/SERIAL/set/surge' \
   -m '{"coefficient":1.0,"active":0,"until_balance_zero":0}'
 ```
 
-Замените `SERIAL` на `posts.serialNumber`.
+Replace `SERIAL` with `posts.serialNumber`.

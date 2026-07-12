@@ -1,9 +1,9 @@
 <!DOCTYPE html>
-<html lang="ru">
+<html lang="en">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Справка — Динамические цены</title>
+  <title>Help — Dynamic Pricing</title>
   <style>
     body { font-family: system-ui, sans-serif; line-height: 1.55; color: #1e293b; margin: 0; padding: 1.25rem; max-width: 42rem; }
     h1 { font-size: 1.15rem; margin: 0 0 0.75rem; }
@@ -13,26 +13,26 @@
   </style>
 </head>
 <body>
-  <h1>Динамические цены</h1>
-  <p>Модуль отслеживает занятость постов и при высокой нагрузке отправляет в MQTT <strong>коэффициент списания</strong> (не меняет прайс-лист).</p>
-  <h2>Логика CRM</h2>
+  <h1>Dynamic Pricing</h1>
+  <p>The module tracks post occupancy and, under high load, sends an MQTT <strong>debit coefficient</strong> (the price list is not changed).</p>
+  <h2>CRM logic</h2>
   <ul>
-    <li>Опрашивает <code>post-states</code> и считает занятые посты выбранной автомойки.</li>
-    <li>При достижении порога — публикует <code>{prefix}/{serial}/set/surge</code> с коэффициентом (через <code>message-processor</code>, учётная запись <code>system</code>).</li>
-    <li>При снижении занятости — отправляет сброс (<code>active: 0</code>, <code>coefficient: 1</code>).</li>
-    <li>Цены в CRM и на панели <strong>не перезаписываются</strong>.</li>
+    <li>Polls <code>post-states</code> and counts busy posts for the selected car wash.</li>
+    <li>When the threshold is reached — publishes <code>{prefix}/{serial}/set/surge</code> with the coefficient (via <code>message-processor</code>, <code>system</code> account).</li>
+    <li>When occupancy drops — sends reset (<code>active: 0</code>, <code>coefficient: 1</code>).</li>
+    <li>Prices in CRM and on the panel are <strong>not overwritten</strong>.</li>
   </ul>
   <h2>MQTT payload</h2>
   <pre><code>{ "coefficient": 1.10, "active": 1, "until_balance_zero": 1 }</code></pre>
-  <p>Коэффициент действует на устройстве <strong>до обнуления баланса</strong> текущей сессии (логика на стороне панели).</p>
-  <h2>Внедрение на автомойке</h2>
-  <p>Подробная спецификация для прошивки панели — файл <code>CLIENT.md</code> в репозитории модуля.</p>
-  <h2>Настройки</h2>
+  <p>The coefficient applies on the device <strong>until the current session balance reaches zero</strong> (panel-side logic).</p>
+  <h2>Car wash integration</h2>
+  <p>Full firmware specification — <code>CLIENT.md</code> in the module repository.</p>
+  <h2>Settings</h2>
   <ul>
-    <li><code>wash_id</code> — автомойка.</li>
-    <li><code>busy_threshold</code> — минимум занятых постов (например, 9 из 10).</li>
-    <li><code>price_increase_percent</code> — процент → коэффициент (<code>10%</code> = <code>1.10</code>).</li>
-    <li><code>poll_interval</code> — интервал опроса (от 5 сек, шаг 5 сек).</li>
+    <li><code>wash_id</code> — car wash.</li>
+    <li><code>busy_threshold</code> — minimum busy posts (e.g. 9 of 10).</li>
+    <li><code>price_increase_percent</code> — percent → coefficient (<code>10%</code> = <code>1.10</code>).</li>
+    <li><code>poll_interval</code> — poll interval (from 5 sec, step 5 sec).</li>
   </ul>
 </body>
 </html>

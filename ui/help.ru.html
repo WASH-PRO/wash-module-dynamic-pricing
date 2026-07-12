@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Справка — Динамические цены</title>
+  <style>
+    body { font-family: system-ui, sans-serif; line-height: 1.55; color: #1e293b; margin: 0; padding: 1.25rem; max-width: 42rem; }
+    h1 { font-size: 1.15rem; margin: 0 0 0.75rem; }
+    h2 { font-size: 0.95rem; margin: 1.25rem 0 0.5rem; }
+    p, li { font-size: 0.875rem; }
+    code { background: #f1f5f9; padding: 0.1rem 0.35rem; border-radius: 0.25rem; }
+  </style>
+</head>
+<body>
+  <h1>Динамические цены</h1>
+  <p>Модуль отслеживает занятость постов и при высокой нагрузке отправляет в MQTT <strong>коэффициент списания</strong> (не меняет прайс-лист).</p>
+  <h2>Логика CRM</h2>
+  <ul>
+    <li>Опрашивает <code>post-states</code> и считает занятые посты выбранной автомойки.</li>
+    <li>При достижении порога — публикует <code>{prefix}/{serial}/set/surge</code> с коэффициентом (через <code>message-processor</code>, учётная запись <code>system</code>).</li>
+    <li>При снижении занятости — отправляет сброс (<code>active: 0</code>, <code>coefficient: 1</code>).</li>
+    <li>Цены в CRM и на панели <strong>не перезаписываются</strong>.</li>
+  </ul>
+  <h2>MQTT payload</h2>
+  <pre><code>{ "coefficient": 1.10, "active": 1, "until_balance_zero": 1 }</code></pre>
+  <p>Коэффициент действует на устройстве <strong>до обнуления баланса</strong> текущей сессии (логика на стороне панели).</p>
+  <h2>Внедрение на автомойке</h2>
+  <p>Подробная спецификация для прошивки панели — файл <code>CLIENT.ru.md</code> в репозитории модуля.</p>
+  <h2>Настройки</h2>
+  <ul>
+    <li><code>wash_id</code> — автомойка.</li>
+    <li><code>busy_threshold</code> — минимум занятых постов (например, 9 из 10).</li>
+    <li><code>price_increase_percent</code> — процент → коэффициент (<code>10%</code> = <code>1.10</code>).</li>
+    <li><code>poll_interval</code> — интервал опроса (от 5 сек, шаг 5 сек).</li>
+  </ul>
+</body>
+</html>

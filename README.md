@@ -1,35 +1,37 @@
+**Language:** **English** · [Русский](README.ru.md)
+
 # wash-module-dynamic-pricing
 
-Модуль WASH PRO CRM: **Динамические цены** (MQTT surge).
+WASH PRO CRM module: **Dynamic Pricing** (MQTT surge).
 
-При высокой занятости отправляет **коэффициент списания** в топик `set/surge`. Прайс-лист не меняется.
+When occupancy is high, sends a **debit coefficient** to the `set/surge` topic. The price list is not changed.
 
-## Внедрение на автомойке
+## Car wash integration
 
-См. **[CLIENT.md](./CLIENT.md)** — спецификация для прошивки панели / ETH-модуля.
+See **[CLIENT.md](./CLIENT.md)** — specification for panel / ETH-module firmware.
 
-## Настройки
+## Settings
 
-| Ключ | Описание |
-|------|----------|
-| `wash_id` | ID автомойки |
-| `busy_threshold` | Минимум занятых постов |
-| `price_increase_percent` | Процент → коэффициент (`10` = `1.10`) |
-| `poll_interval` | Интервал опроса (сек) |
+| Key | Description |
+|-----|-------------|
+| `wash_id` | Car wash ID |
+| `busy_threshold` | Minimum busy posts |
+| `price_increase_percent` | Percent → coefficient (`10` = `1.10`) |
+| `poll_interval` | Poll interval (sec) |
 
 ## MQTT
 
-Топик: `{prefix}/{serial}/set/surge` (публикация от CRM `system`)
+Topic: `{prefix}/{serial}/set/surge` (published by CRM `system` account)
 
 ```json
 { "coefficient": 1.10, "active": 1, "until_balance_zero": 1 }
 ```
 
-## Версии
+## Versions
 
-- **1.1.0** — коэффициент через MQTT `set/surge` (вместо изменения цен)
-- **1.0.x** — устаревший подход с `set/prices`
+- **1.1.0** — coefficient via MQTT `set/surge` (instead of price changes)
+- **1.0.x** — legacy approach with `set/prices`
 
-## Лицензия
+## License
 
 MIT
