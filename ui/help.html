@@ -14,25 +14,25 @@
 </head>
 <body>
   <h1>Динамические цены</h1>
-  <p>Модуль отслеживает занятость постов выбранной автомойки и автоматически повышает цены при высокой нагрузке.</p>
-  <h2>Логика</h2>
+  <p>Модуль отслеживает занятость постов и при высокой нагрузке отправляет в MQTT <strong>коэффициент списания</strong> (не меняет прайс-лист).</p>
+  <h2>Логика CRM</h2>
   <ul>
-    <li>Опрашивает <code>GET /api/crm/post-states</code> и считает занятые посты (как в модуле «Монитор занятости»).</li>
-    <li>Если занятых постов <strong>не меньше порога</strong> — сохраняет исходные цены и применяет повышение в процентах к каждому режиму, где цена &gt; 0.</li>
-    <li>Когда занятость падает ниже порога — восстанавливает сохранённые исходные цены.</li>
-    <li>Цены отправляются на посты через <code>message-processor</code> (MQTT + CRM).</li>
+    <li>Опрашивает <code>post-states</code> и считает занятые посты выбранной автомойки.</li>
+    <li>При достижении порога — публикует <code>{prefix}/{serial}/set/surge</code> с коэффициентом (через <code>message-processor</code>, учётная запись <code>system</code>).</li>
+    <li>При снижении занятости — отправляет сброс (<code>active: 0</code>, <code>coefficient: 1</code>).</li>
+    <li>Цены в CRM и на панели <strong>не перезаписываются</strong>.</li>
   </ul>
+  <h2>MQTT payload</h2>
+  <pre><code>{ "coefficient": 1.10, "active": 1, "until_balance_zero": 1 }</code></pre>
+  <p>Коэффициент действует на устройстве <strong>до обнуления баланса</strong> текущей сессии (логика на стороне панели).</p>
+  <h2>Внедрение на автомойке</h2>
+  <p>Подробная спецификация для прошивки панели — файл <code>CLIENT.md</code> в репозитории модуля.</p>
   <h2>Настройки</h2>
   <ul>
-    <li><code>wash_id</code> — автомойка для мониторинга.</li>
-    <li><code>busy_threshold</code> — минимальное число занятых постов для включения повышения (например, 9 из 10).</li>
-    <li><code>price_increase_percent</code> — процент повышения (0–200).</li>
-    <li><code>poll_interval</code> — интервал опроса (15–3600 сек).</li>
-    <li><code>api_login</code> / <code>api_password</code> — учётные данные CRM для записи цен (по умолчанию сервисный аккаунт).</li>
+    <li><code>wash_id</code> — автомойка.</li>
+    <li><code>busy_threshold</code> — минимум занятых постов (например, 9 из 10).</li>
+    <li><code>price_increase_percent</code> — процент → коэффициент (<code>10%</code> = <code>1.10</code>).</li>
+    <li><code>poll_interval</code> — интервал опроса.</li>
   </ul>
-  <h2>Логи и события</h2>
-  <p>События (<code>surge_activated</code>, <code>surge_deactivated</code>) пишутся в stdout PyOrchestrator и отображаются на вкладке <strong>Логи</strong>. История последних событий — в обзоре модуля и <code>data/pricing_state.json</code>.</p>
-  <h2>Запуск</h2>
-  <p>Требуется PyOrchestrator. После настройки автомойки и порога нажмите <strong>Запустить</strong> на карточке модуля.</p>
 </body>
 </html>

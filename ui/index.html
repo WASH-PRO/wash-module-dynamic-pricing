@@ -89,8 +89,8 @@
       refreshInterval: 10000,
       title: { ru: 'Динамические цены', en: 'Dynamic pricing' },
       subtitle: {
-        ru: 'Повышает цены постов при высокой занятости и возвращает исходные при снижении нагрузки.',
-        en: 'Raises post prices when occupancy is high and restores originals when it drops.',
+        ru: 'При высокой занятости отправляет коэффициент списания в MQTT (до обнуления баланса). Прайс-лист не меняется.',
+        en: 'Sends a debit coefficient over MQTT when busy (until balance zero). Price list is unchanged.',
       },
       settingsHtml: `
         <div class="wm-field wm-field--full">
@@ -104,9 +104,9 @@
           <span class="wm-field-hint" id="busy_threshold_hint">${WashModule.t({ ru: 'Например: 9 — при 9 занятых постах из 10.', en: 'Example: 9 — when 9 of 10 posts are busy.' })}</span>
         </div>
         <div class="wm-field">
-          <label class="wm-field-label" for="price_increase_percent">${WashModule.t({ ru: 'Повышение цены (%)', en: 'Price increase (%)' })}</label>
+          <label class="wm-field-label" for="price_increase_percent">${WashModule.t({ ru: 'Повышение списания (%)', en: 'Debit increase (%)' })}</label>
           <input class="wm-input" id="price_increase_percent" type="number" name="price_increase_percent" min="0" max="200" step="1" />
-          <span class="wm-field-hint">${WashModule.t({ ru: 'Добавляется к каждому режиму, где цена больше 0.', en: 'Applied to each mode where price is greater than 0.' })}</span>
+          <span class="wm-field-hint">${WashModule.t({ ru: '10% → коэффициент 1.10 в MQTT set/surge. Действует на устройстве до обнуления баланса.', en: '10% → coefficient 1.10 via MQTT set/surge. Applied on device until balance zero.' })}</span>
         </div>
         <div class="wm-field">
           <label class="wm-field-label" for="poll_interval">${WashModule.t({ ru: 'Интервал опроса (сек)', en: 'Poll interval (sec)' })}</label>
@@ -162,8 +162,8 @@
             value: snap.busyThreshold ?? '—',
           },
           {
-            label: WashModule.t({ ru: 'Повышение', en: 'Surge' }),
-            value: snap.surgeActive ? '+' + (snap.priceIncreasePercent ?? 0) + '%' : WashModule.t({ ru: 'Выкл.', en: 'Off' }),
+            label: WashModule.t({ ru: 'Коэфф.', en: 'Coeff.' }),
+            value: snap.surgeActive ? '×' + (snap.surgeCoefficient ?? 1) : '×1',
             tone: snap.surgeActive ? 'accent' : undefined,
           },
           {
@@ -186,8 +186,8 @@
             }).join('')}</ul>`
           : `<p class="wm-field-hint">${WashModule.t({ ru: 'Событий пока нет.', en: 'No events yet.' })}</p>`;
         const status = snap.surgeActive
-          ? WashModule.t({ ru: 'Повышение активно', en: 'Surge active' })
-          : WashModule.t({ ru: 'Базовые цены', en: 'Base prices' });
+          ? WashModule.t({ ru: 'Коэффициент в MQTT активен', en: 'MQTT coefficient active' })
+          : WashModule.t({ ru: 'Без повышения', en: 'No surge' });
         return `
           ${configWarning}
           <h2 class="wm-section-title">${WashModule.t({ ru: 'Статус', en: 'Status' })}</h2>

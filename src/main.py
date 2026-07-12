@@ -1,9 +1,8 @@
-"""WASH module: dynamic pricing based on post occupancy."""
+"""WASH module: dynamic pricing via MQTT surge coefficient."""
 
 from __future__ import annotations
 
 import json
-import math
 import os
 import time
 import urllib.error
@@ -18,11 +17,10 @@ PROCESSOR_API_BASE = os.environ.get("PROCESSOR_API_BASE_URL", "http://message-pr
 DATA_DIR = os.environ.get("MODULE_DATA_DIR", "/data")
 
 LOG_PREFIX = "[dynamic-pricing]"
-STATE_FILE = "pricing_state.json"
+STATE_FILE = "surge_state.json"
 SNAPSHOT_FILE = "last_snapshot.json"
 SETTINGS_FILE = "settings.json"
 MAX_EVENTS = 30
-READONLY_MODES = {"8", "9"}
 
 _runtime_config: RuntimeConfig | None = None
 _access_token: str | None = None
@@ -36,6 +34,10 @@ class RuntimeConfig:
     poll_interval: int
     api_login: str
     api_password: str
+
+    @property
+    def surge_coefficient(self) -> float:
+        return round(1 + max(0.0, self.price_increase_percent) / 100.0, 4)
 
 
 def log(message: str) -> None:
@@ -147,22 +149,6 @@ def auth_headers() -> dict[str, str]:
     return {"Authorization": f"Bearer {_access_token}"}
 
 
-def api_call(method: str, path: str, body: dict | None = None) -> dict:
-    global _access_token
-    try:
-        return request_json(method, API_BASE, path, body=body, headers=auth_headers())
-    except urllib.error.HTTPError as err:
-        if err.code == 401:
-            api_login()
-            return request_json(method, API_BASE, path, body=body, headers=auth_headers())
-        err_body = err.read().decode()
-        try:
-            parsed = json.loads(err_body)
-            raise RuntimeError(parsed.get("error", err_body)) from err
-        except json.JSONDecodeError as decode_err:
-            raise RuntimeError(f"HTTP {err.code}: {err_body}") from decode_err
-
-
 def processor_post(path: str, body: dict) -> Any:
     global _access_token
     try:
@@ -202,54 +188,14 @@ def post_busy(state: dict | None) -> bool:
     return True
 
 
-def normalize_mode_prices(raw: Any) -> dict[str, int]:
-    if not isinstance(raw, dict):
-        return {}
-    result: dict[str, int] = {}
-    for key, value in raw.items():
-        if not str(key).isdigit():
-            continue
-        try:
-            price = int(round(float(value)))
-        except (TypeError, ValueError):
-            continue
-        if price >= 0:
-            result[str(key)] = price
-    return result
-
-
-def apply_increase(prices: dict[str, int], percent: float) -> dict[str, int]:
-    factor = 1 + max(0.0, percent) / 100.0
-    result: dict[str, int] = {}
-    for mode, price in prices.items():
-        if mode in READONLY_MODES:
-            continue
-        if price > 0:
-            result[mode] = max(0, int(math.ceil(price * factor)))
-        else:
-            result[mode] = price
-    return result
-
-
 def load_state() -> dict:
     path = os.path.join(DATA_DIR, STATE_FILE)
     if not os.path.isfile(path):
-        return {
-            "washId": "",
-            "surgeActive": False,
-            "originalPrices": {},
-            "recentEvents": [],
-        }
+        return {"washId": "", "surgeActive": False, "recentEvents": []}
     with open(path, encoding="utf-8") as f:
         data = json.load(f)
     if not isinstance(data, dict):
-        return {
-            "washId": "",
-            "surgeActive": False,
-            "originalPrices": {},
-            "recentEvents": [],
-        }
-    data.setdefault("originalPrices", {})
+        return {"washId": "", "surgeActive": False, "recentEvents": []}
     data.setdefault("recentEvents", [])
     return data
 
@@ -274,78 +220,51 @@ def add_event(state: dict, event_type: str, message: str, details: dict | None =
     del events[:-MAX_EVENTS]
 
 
-def push_post_prices(serial: str, prices: dict[str, int], mqtt_prefix: str | None = None) -> None:
+def send_surge_to_post(
+    post: dict,
+    *,
+    coefficient: float,
+    active: bool,
+) -> bool:
+    serial = str(post.get("serialNumber") or "").strip()
+    if not serial:
+        post_id = ref_id(post.get("id"))
+        log(f"skip post={post_id or '?'}: no serialNumber for MQTT")
+        return False
+
+    settings = post.get("settings") if isinstance(post.get("settings"), dict) else {}
+    mqtt_prefix = str(settings.get("mqttPrefix") or "").strip() or None
     body: dict[str, Any] = {
-        "prices": prices,
-        "sendToDevice": True,
-        "persist": True,
+        "coefficient": coefficient,
+        "active": active,
+        "untilBalanceZero": True,
     }
     if mqtt_prefix:
         body["mqttPrefix"] = mqtt_prefix
-    processor_post(f"/posts/{urllib.parse.quote(serial, safe='')}/prices", body)
 
-
-def update_post_prices(post: dict, prices: dict[str, int]) -> bool:
-    serial = str(post.get("serialNumber") or "").strip()
-    settings = post.get("settings") if isinstance(post.get("settings"), dict) else {}
-    mqtt_prefix = str(settings.get("mqttPrefix") or "").strip() or None
-    if serial:
-        push_post_prices(serial, prices, mqtt_prefix)
-        return True
-
-    post_id = ref_id(post.get("id"))
-    if not post_id:
-        return False
-
-    api_call(
-        "PUT",
-        f"/api/crm/posts/{post_id}",
-        {
-            "washId": ref_id(post.get("washId")),
-            "postNumber": post.get("postNumber"),
-            "name": post.get("name"),
-            "serialNumber": post.get("serialNumber"),
-            "settings": {
-                **settings,
-                "modePrices": prices,
-                "pricesUpdatedAt": datetime.now(timezone.utc).isoformat(),
-            },
-        },
-    )
+    processor_post(f"/posts/{urllib.parse.quote(serial, safe='')}/surge", body)
     return True
 
 
-def apply_prices_to_posts(
+def apply_surge_to_posts(
     posts: list[dict],
-    originals: dict[str, dict[str, int]],
-    mode: str,
-    percent: float,
-) -> tuple[int, dict[str, dict[str, int]]]:
+    *,
+    coefficient: float,
+    active: bool,
+) -> int:
     updated = 0
-    stored = dict(originals)
     for post in posts:
         post_id = ref_id(post.get("id"))
-        if not post_id:
-            continue
-        settings = post.get("settings") if isinstance(post.get("settings"), dict) else {}
-        current = normalize_mode_prices(settings.get("modePrices"))
-        if mode == "surge":
-            if post_id not in stored:
-                stored[post_id] = current
-            target = apply_increase(stored[post_id], percent)
-        else:
-            target = stored.get(post_id, current)
-
-        if not target:
-            log(f"skip post={post_id}: no prices configured")
-            continue
         try:
-            if update_post_prices(post, target):
+            if send_surge_to_post(post, coefficient=coefficient, active=active):
                 updated += 1
-                log(f"{mode} post={post_id} prices={target}")
+                log(
+                    f"mqtt surge post={post_id} serial={post.get('serialNumber')} "
+                    f"coefficient={coefficient} active={active}"
+                )
         except Exception as err:  # noqa: BLE001
             log(f"failed post={post_id}: {err}")
-    return updated, stored
+    return updated
 
 
 def build_snapshot(
@@ -366,6 +285,7 @@ def build_snapshot(
         "busyPosts": busy_posts,
         "busyThreshold": config.busy_threshold,
         "surgeActive": surge_active,
+        "surgeCoefficient": config.surge_coefficient if surge_active else 1.0,
         "priceIncreasePercent": config.price_increase_percent,
         "postsUpdatedLastCycle": posts_updated,
         "lastEvent": last_event,
@@ -430,7 +350,6 @@ def run_cycle(config: RuntimeConfig) -> int:
         state = {
             "washId": config.wash_id,
             "surgeActive": False,
-            "originalPrices": {},
             "recentEvents": state.get("recentEvents", []),
         }
         add_event(state, "wash_changed", f"Selected wash {config.wash_id}")
@@ -440,45 +359,42 @@ def run_cycle(config: RuntimeConfig) -> int:
     surge_active = bool(state.get("surgeActive"))
     posts_updated = 0
     last_event = "idle"
+    coefficient = config.surge_coefficient
 
     if threshold_met and not surge_active:
-        posts_updated, originals = apply_prices_to_posts(
+        posts_updated = apply_surge_to_posts(
             wash_posts,
-            state.get("originalPrices", {}),
-            "surge",
-            config.price_increase_percent,
+            coefficient=coefficient,
+            active=True,
         )
-        state["originalPrices"] = originals
         state["surgeActive"] = True
         msg = (
-            f"Surge activated: busy={busy_posts}/{total_posts}, "
-            f"+{config.price_increase_percent}% on {posts_updated} posts"
+            f"Surge MQTT sent: busy={busy_posts}/{total_posts}, "
+            f"k={coefficient} on {posts_updated} posts (until balance zero)"
         )
         add_event(
             state,
             "surge_activated",
             msg,
-            {"busy": busy_posts, "total": total_posts, "postsUpdated": posts_updated},
+            {"busy": busy_posts, "total": total_posts, "coefficient": coefficient, "postsUpdated": posts_updated},
         )
         log(msg)
         last_event = "surge_activated"
 
     elif threshold_met and surge_active:
         last_event = "surge_active"
-        log(f"surge active: busy={busy_posts}/{total_posts} (threshold={config.busy_threshold})")
+        log(f"surge active: busy={busy_posts}/{total_posts} k={coefficient}")
 
     elif not threshold_met and surge_active:
-        posts_updated, _ = apply_prices_to_posts(
+        posts_updated = apply_surge_to_posts(
             wash_posts,
-            state.get("originalPrices", {}),
-            "restore",
-            config.price_increase_percent,
+            coefficient=1.0,
+            active=False,
         )
         state["surgeActive"] = False
-        state["originalPrices"] = {}
         msg = (
-            f"Surge deactivated: busy={busy_posts}/{total_posts}, "
-            f"restored prices on {posts_updated} posts"
+            f"Surge MQTT cleared: busy={busy_posts}/{total_posts}, "
+            f"reset on {posts_updated} posts"
         )
         add_event(
             state,
@@ -509,7 +425,7 @@ def run_cycle(config: RuntimeConfig) -> int:
 
 
 def main() -> None:
-    log(f"daemon started, data_dir={DATA_DIR}")
+    log(f"daemon started (MQTT surge mode), data_dir={DATA_DIR}")
     while True:
         config = load_runtime_config()
         sleep_for = config.poll_interval
