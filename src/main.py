@@ -119,8 +119,8 @@ def pick_number(settings: dict[str, Any], key: str, env_key: str, default: float
 
 
 def normalize_poll_interval(value: float) -> int:
-    raw = max(10, int(value))
-    return min(3600, max(10, round(raw / 10) * 10))
+    raw = max(5, int(value))
+    return min(3600, max(5, round(raw / 5) * 5))
 
 
 def load_runtime_config() -> RuntimeConfig:
