@@ -14,7 +14,28 @@ from typing import Any
 
 API_BASE = os.environ.get("API_BASE_URL", "http://dynamic-api:3001").rstrip("/")
 PROCESSOR_API_BASE = os.environ.get("PROCESSOR_API_BASE_URL", "http://message-processor:3022").rstrip("/")
-DATA_DIR = os.environ.get("MODULE_DATA_DIR", "/data")
+MODULE_ID = "dynamic-pricing"
+
+
+def resolve_data_dir() -> str:
+    """Путь к data/: секрет PyOrch, иначе общий том /modules/installed/…/data."""
+    for key in ("MODULE_DATA_DIR", "SECRET_MODULE_DATA_DIR"):
+        raw = os.environ.get(key, "").strip()
+        if raw:
+            return raw.rstrip("/")
+    shared = f"/modules/installed/{MODULE_ID}/data"
+    if os.path.isdir("/modules/installed") or os.path.isdir("/modules"):
+        try:
+            os.makedirs(shared, exist_ok=True)
+            return shared
+        except OSError:
+            pass
+    fallback = os.path.join(os.getcwd(), "data")
+    os.makedirs(fallback, exist_ok=True)
+    return fallback
+
+
+DATA_DIR = resolve_data_dir()
 
 LOG_PREFIX = "[dynamic-pricing]"
 STATE_FILE = "surge_state.json"
@@ -442,6 +463,33 @@ def run_cycle(config: RuntimeConfig) -> int:
 
 def main() -> None:
     log(f"daemon started (MQTT surge mode), data_dir={DATA_DIR}")
+    config = load_runtime_config()
+    state = load_state()
+    if not config.wash_id:
+        save_snapshot(
+            build_snapshot(
+                config=config,
+                total_posts=0,
+                busy_posts=0,
+                surge_active=bool(state.get("surgeActive")),
+                posts_updated=0,
+                last_event="config_missing",
+                recent_events=state.get("recentEvents", []),
+                config_error="wash_id is not configured — select a car wash in module settings",
+            )
+        )
+    else:
+        save_snapshot(
+            build_snapshot(
+                config=config,
+                total_posts=0,
+                busy_posts=0,
+                surge_active=bool(state.get("surgeActive")),
+                posts_updated=0,
+                last_event="starting",
+                recent_events=state.get("recentEvents", []),
+            )
+        )
     while True:
         config = load_runtime_config()
         sleep_for = config.poll_interval

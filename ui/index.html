@@ -183,30 +183,48 @@
         }
         loadWashes(settings.wash_id ?? '');
       },
-      metrics(snap) {
-        if (!snap) return [];
+      metrics(snap, status) {
+        const settings = (status && status.settings) || {};
+        const s = snap || {};
+        const busyThreshold = s.busyThreshold ?? settings.busy_threshold ?? 1;
+        const percent = s.priceIncreasePercent ?? settings.price_increase_percent ?? 10;
+        const surgeActive = Boolean(s.surgeActive);
+        const hasOccupancy = s.busyPosts !== undefined && s.totalPosts !== undefined;
+        const busyValue = hasOccupancy
+          ? String(s.busyPosts ?? 0) + '/' + String(s.totalPosts ?? 0)
+          : '—';
+        let lastEvent = s.lastEvent;
+        if (!lastEvent) {
+          if (status && status.activeRunStatus === 'running') lastEvent = 'starting';
+          else if (status && status.state && status.state.status === 'running') lastEvent = 'starting';
+          else lastEvent = 'awaiting_run';
+        }
         return [
-          { label: WashModule.t({ ru: 'Занято', en: 'Busy' }), value: (snap.busyPosts ?? 0) + '/' + (snap.totalPosts ?? 0), accent: true },
+          { label: WashModule.t({ ru: 'Занято', en: 'Busy' }), value: busyValue, accent: true },
           {
             label: WashModule.t({ ru: 'Порог', en: 'Threshold' }),
-            value: snap.busyThreshold ?? '—',
+            value: String(busyThreshold),
           },
           {
             label: WashModule.t({ ru: 'Коэфф.', en: 'Coeff.' }),
-            value: snap.surgeActive
-              ? '×' + formatCoeff(percentToCoeff(snap.priceIncreasePercent ?? 0))
+            value: surgeActive
+              ? '×' + formatCoeff(percentToCoeff(percent))
               : '×1.00',
-            tone: snap.surgeActive ? 'accent' : undefined,
+            tone: surgeActive ? 'accent' : undefined,
           },
           {
             label: WashModule.t({ ru: 'Событие', en: 'Event' }),
-            value: snap.lastEvent || '—',
+            value: lastEvent,
           },
         ];
       },
-      renderOverview(snap) {
+      renderOverview(snap, status) {
+        const settings = (status && status.settings) || {};
         if (!snap) {
-          return `<div class="wm-empty">${WashModule.escapeHtml(WashModule.t({ ru: 'Нет снимка — запустите модуль.', en: 'No snapshot yet — start the module.' }))}</div>`;
+          const hint = settings.wash_id
+            ? WashModule.t({ ru: 'Модуль ещё не записал снимок — запустите его или дождитесь первого цикла.', en: 'No snapshot yet — start the module or wait for the first poll cycle.' })
+            : WashModule.t({ ru: 'Нет снимка — выберите автомойку в настройках и запустите модуль.', en: 'No snapshot — select a car wash in settings and start the module.' });
+          return `<div class="wm-empty">${WashModule.escapeHtml(hint)}</div>`;
         }
         const configWarning = snap.lastEvent === 'config_missing' || snap.configError
           ? `<div class="wm-alert wm-alert--error" style="margin-bottom:1rem">${WashModule.escapeHtml(snap.configError || WashModule.t({ ru: 'Автомойка не выбрана. Откройте вкладку «Настройки», выберите автомойку и сохраните.', en: 'Car wash is not selected. Open Settings, choose a car wash, and save.' }))}</div>`

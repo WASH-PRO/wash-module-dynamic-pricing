@@ -323,6 +323,9 @@
         els.alert.hidden = false;
         els.alert.className = 'wm-alert wm-alert--error';
         els.alert.textContent = err instanceof Error ? err.message : String(err);
+        if (cfg.metrics && els.metrics) {
+          renderMetrics(els.metrics, cfg.metrics(lastStatus && lastStatus.snapshot, lastStatus));
+        }
       }
 
       await loadLogs();
