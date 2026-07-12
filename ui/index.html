@@ -139,8 +139,8 @@
         </div>
         <div class="wm-field">
           <label class="wm-field-label" for="poll_interval">${WashModule.t({ ru: 'Интервал опроса (сек)', en: 'Poll interval (sec)' })}</label>
-          <input class="wm-input" id="poll_interval" type="number" name="poll_interval" min="15" max="3600" />
-          <span class="wm-field-hint">${WashModule.t({ ru: 'Как часто проверять занятость и применять цены.', en: 'How often to check occupancy and apply prices.' })}</span>
+          <input class="wm-input" id="poll_interval" type="number" name="poll_interval" min="10" max="3600" step="10" />
+          <span class="wm-field-hint">${WashModule.t({ ru: 'Как часто проверять занятость (от 10 сек, шаг 10 сек).', en: 'How often to check occupancy (from 10 sec, step 10 sec).' })}</span>
         </div>
         <div class="wm-field">
           <label class="wm-field-label" for="api_login">${WashModule.t({ ru: 'Логин CRM API', en: 'CRM API login' })}</label>
@@ -165,7 +165,7 @@
           wash_id: washId,
           busy_threshold: Number(form.busy_threshold.value),
           price_increase_percent: Math.min(300, Math.max(0, Number(form.price_increase_percent.value))),
-          poll_interval: Number(form.poll_interval.value),
+          poll_interval: Math.min(3600, Math.max(10, Math.round(Number(form.poll_interval.value) / 10) * 10)),
           api_login: String(form.api_login.value || '').trim(),
         };
         if (password) settings.api_password = password;

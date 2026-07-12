@@ -118,6 +118,11 @@ def pick_number(settings: dict[str, Any], key: str, env_key: str, default: float
     return default
 
 
+def normalize_poll_interval(value: float) -> int:
+    raw = max(10, int(value))
+    return min(3600, max(10, round(raw / 10) * 10))
+
+
 def load_runtime_config() -> RuntimeConfig:
     settings = load_settings_file()
     api_password = pick_str(settings, "api_password", "API_PASSWORD", "ServiceInternal123!")
@@ -130,7 +135,7 @@ def load_runtime_config() -> RuntimeConfig:
             0.0,
             min(300.0, pick_number(settings, "price_increase_percent", "PRICE_INCREASE_PERCENT", 10)),
         ),
-        poll_interval=max(15, int(pick_number(settings, "poll_interval", "POLL_INTERVAL", 60))),
+        poll_interval=normalize_poll_interval(pick_number(settings, "poll_interval", "POLL_INTERVAL", 60)),
         api_login=pick_str(settings, "api_login", "API_LOGIN", "service") or "service",
         api_password=api_password,
     )
