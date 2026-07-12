@@ -5,7 +5,7 @@
     "ru": "Отправляет коэффициент списания в MQTT при высокой занятости (до обнуления баланса). Прайс-лист не меняется.",
     "en": "Sends MQTT debit coefficient when busy (until balance zero). Price list unchanged."
   },
-  "version": "1.1.6",
+  "version": "1.1.7",
   "author": "WASH-PRO",
   "license": "MIT",
   "category": "automation",

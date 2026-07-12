@@ -185,6 +185,8 @@
       },
       metrics(snap, status) {
         const settings = (status && status.settings) || {};
+        const running = status && (status.activeRunStatus === 'running' || (status.state && status.state.status === 'running'));
+        if ((!snap || !snap.recordedAt) && !running) return [];
         const s = snap || {};
         const busyThreshold = s.busyThreshold ?? settings.busy_threshold ?? 1;
         const percent = s.priceIncreasePercent ?? settings.price_increase_percent ?? 10;

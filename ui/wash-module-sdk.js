@@ -72,10 +72,23 @@
     return { className: 'wm-status--stopped', label: t({ ru: 'Остановлен', en: 'Stopped' }) };
   }
 
-  function renderMetrics(container, metrics) {
+  function isModuleRunning(statusPayload) {
+    if (!statusPayload || !statusPayload.state) return false;
+    if (statusPayload.activeRunStatus === 'running') return true;
+    return statusPayload.state.status === 'running';
+  }
+
+  function renderMetrics(container, metrics, snap, status) {
     if (!container) return;
-    if (!metrics || !metrics.length) {
+    if (!isModuleRunning(status) && (!snap || !snap.recordedAt)) {
       container.innerHTML = `<div class="wm-empty">${escapeHtml(t({ ru: 'Нет метрик — запустите модуль', en: 'No metrics — start the module' }))}</div>`;
+      return;
+    }
+    if (!metrics || !metrics.length) {
+      const msg = isModuleRunning(status)
+        ? t({ ru: 'Ожидание первого цикла…', en: 'Waiting for first poll…' })
+        : t({ ru: 'Нет метрик — запустите модуль', en: 'No metrics — start the module' });
+      container.innerHTML = `<div class="wm-empty">${escapeHtml(msg)}</div>`;
       return;
     }
     container.innerHTML = metrics
@@ -313,7 +326,12 @@
           els.alert.hidden = true;
         }
 
-        renderMetrics(els.metrics, cfg.metrics ? cfg.metrics(snap, lastStatus) : []);
+        renderMetrics(
+          els.metrics,
+          cfg.metrics ? cfg.metrics(snap, lastStatus) : [],
+          snap,
+          lastStatus
+        );
         els.overview.innerHTML = cfg.renderOverview ? cfg.renderOverview(snap, lastStatus) : '';
 
         if (cfg.applySettings && lastStatus.settings && els.form && !settingsDirty) {
@@ -324,7 +342,13 @@
         els.alert.className = 'wm-alert wm-alert--error';
         els.alert.textContent = err instanceof Error ? err.message : String(err);
         if (cfg.metrics && els.metrics) {
-          renderMetrics(els.metrics, cfg.metrics(lastStatus && lastStatus.snapshot, lastStatus));
+          const snap = lastStatus && lastStatus.snapshot;
+          renderMetrics(
+            els.metrics,
+            cfg.metrics(snap, lastStatus),
+            snap,
+            lastStatus
+          );
         }
       }
 
