@@ -235,13 +235,13 @@
               return '<li><span class="wm-kv"><span>' + WashModule.escapeHtml(WashModule.formatDateTime(e.at)) + '</span><span class="wm-tag">' + WashModule.escapeHtml(String(e.type || '—')) + '</span></span><span class="wm-field-hint">' + WashModule.escapeHtml(String(e.message || '')) + '</span></li>';
             }).join('')}</ul>`
           : `<p class="wm-field-hint">${WashModule.t({ ru: 'Событий пока нет.', en: 'No events yet.' })}</p>`;
-        const status = snap.surgeActive
+        const statusLabel = snap.surgeActive
           ? WashModule.t({ ru: 'Коэффициент в MQTT активен', en: 'MQTT coefficient active' })
           : WashModule.t({ ru: 'Без повышения', en: 'No surge' });
         return `
           ${configWarning}
           <h2 class="wm-section-title">${WashModule.t({ ru: 'Статус', en: 'Status' })}</h2>
-          <p>${WashModule.escapeHtml(status)} · ${WashModule.escapeHtml(String(snap.busyPosts ?? 0))}/${WashModule.escapeHtml(String(snap.totalPosts ?? 0))} ${WashModule.t({ ru: 'постов занято', en: 'posts busy' })}</p>
+          <p>${WashModule.escapeHtml(statusLabel)} · ${WashModule.escapeHtml(String(snap.busyPosts ?? 0))}/${WashModule.escapeHtml(String(snap.totalPosts ?? 0))} ${WashModule.t({ ru: 'постов занято', en: 'posts busy' })}</p>
           <h2 class="wm-section-title" style="margin-top:1rem">${WashModule.t({ ru: 'События', en: 'Events' })}</h2>
           ${eventsHtml}
           <h2 class="wm-section-title" style="margin-top:1rem">${WashModule.t({ ru: 'Снимок', en: 'Snapshot' })}</h2>
