@@ -333,13 +333,19 @@ def run_cycle() -> None:
         states = []
 
     wash_states = [s for s in states if ref_id(s.get("washId")) == WASH_ID]
-    busy_posts = sum(1 for s in wash_states if post_busy(s))
-    total_posts = len(wash_states)
 
     posts = fetch_public("/api/crm/posts?limit=500")
     if not isinstance(posts, list):
         posts = []
     wash_posts = [p for p in posts if ref_id(p.get("washId")) == WASH_ID]
+    wash_post_ids = {ref_id(p.get("id")) for p in wash_posts if ref_id(p.get("id"))}
+
+    busy_posts = sum(
+        1
+        for s in wash_states
+        if ref_id(s.get("postId")) in wash_post_ids and post_busy(s)
+    )
+    total_posts = len(wash_posts)
 
     state = load_state()
     if state.get("washId") != WASH_ID:
