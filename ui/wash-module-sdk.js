@@ -249,7 +249,13 @@
     app.querySelector('.wm-title').textContent = t(cfg.title);
     app.querySelector('.wm-subtitle').textContent = cfg.subtitle ? t(cfg.subtitle) : '';
 
-    bindTabs(app, notifyResize);
+    bindTabs(app, function () {
+      const activeTab = app.querySelector('.wm-tab.is-active');
+      if (activeTab && activeTab.getAttribute('data-tab') === 'logs') {
+        void loadLogs();
+      }
+      notifyResize();
+    });
 
     const els = {
       statusBadge: app.querySelector('#wm-status-badge'),

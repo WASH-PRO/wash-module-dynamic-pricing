@@ -41,7 +41,15 @@ class RuntimeConfig:
 
 
 def log(message: str) -> None:
+    line = f"{datetime.now(timezone.utc).isoformat()} info {message}"
     print(f"{LOG_PREFIX} {message}", flush=True)
+    try:
+        os.makedirs(DATA_DIR, exist_ok=True)
+        path = os.path.join(DATA_DIR, "activity.log")
+        with open(path, "a", encoding="utf-8") as f:
+            f.write(line + "\n")
+    except OSError:
+        pass
 
 
 def ref_id(value: Any) -> str:
