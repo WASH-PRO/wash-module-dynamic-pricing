@@ -9,7 +9,12 @@
   }
 
   function getLocale() {
-    return localStorage.getItem('wash_crm_locale') || 'ru';
+    const stored = localStorage.getItem('wash_locale') || localStorage.getItem('wash_crm_locale');
+    return stored === 'ru' ? 'ru' : 'en';
+  }
+
+  function syncDocumentLocale() {
+    document.documentElement.lang = getLocale();
   }
 
   function t(map) {
@@ -221,6 +226,7 @@
    * @param {(snap: object|null, status: object) => string} cfg.renderOverview
    */
   function createPage(cfg) {
+    syncDocumentLocale();
     const app = document.getElementById('wm-app');
     if (!app) throw new Error('#wm-app not found');
 
