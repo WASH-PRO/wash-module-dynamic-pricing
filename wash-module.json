@@ -1,0 +1,63 @@
+{
+  "id": "dynamic-pricing",
+  "name": { "ru": "Динамические цены", "en": "Dynamic Pricing" },
+  "description": {
+    "ru": "Повышает цены постов при высокой занятости автомойки и возвращает исходные при снижении нагрузки.",
+    "en": "Raises post prices when the car wash is busy and restores originals when occupancy drops."
+  },
+  "version": "1.0.0",
+  "author": "WASH-PRO",
+  "license": "MIT",
+  "category": "automation",
+  "icon": "assets/icon.svg",
+  "repository": "https://github.com/WASH-PRO/wash-module-dynamic-pricing",
+  "dependencies": [],
+  "minCrmVersion": "1.1.30",
+  "entrypoint": "src/main.py",
+  "helpPage": "ui/help.html",
+  "scriptType": "daemon",
+  "settingsSchema": [
+    {
+      "key": "wash_id",
+      "type": "string",
+      "label": { "ru": "Автомойка", "en": "Car wash" },
+      "default": ""
+    },
+    {
+      "key": "busy_threshold",
+      "type": "number",
+      "label": { "ru": "Порог занятости (постов)", "en": "Occupancy threshold (posts)" },
+      "default": 9,
+      "min": 1,
+      "max": 100
+    },
+    {
+      "key": "price_increase_percent",
+      "type": "number",
+      "label": { "ru": "Повышение цены (%)", "en": "Price increase (%)" },
+      "default": 10,
+      "min": 0,
+      "max": 200
+    },
+    {
+      "key": "poll_interval",
+      "type": "number",
+      "label": { "ru": "Интервал опроса (сек)", "en": "Poll interval (sec)" },
+      "default": 60,
+      "min": 15,
+      "max": 3600
+    },
+    {
+      "key": "api_login",
+      "type": "string",
+      "label": { "ru": "Логин CRM API", "en": "CRM API login" },
+      "default": "service"
+    },
+    {
+      "key": "api_password",
+      "type": "string",
+      "label": { "ru": "Пароль CRM API", "en": "CRM API password" },
+      "default": ""
+    }
+  ]
+}

@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Справка — Динамические цены</title>
+  <style>
+    body { font-family: system-ui, sans-serif; line-height: 1.55; color: #1e293b; margin: 0; padding: 1.25rem; max-width: 42rem; }
+    h1 { font-size: 1.15rem; margin: 0 0 0.75rem; }
+    h2 { font-size: 0.95rem; margin: 1.25rem 0 0.5rem; }
+    p, li { font-size: 0.875rem; }
+    code { background: #f1f5f9; padding: 0.1rem 0.35rem; border-radius: 0.25rem; }
+  </style>
+</head>
+<body>
+  <h1>Динамические цены</h1>
+  <p>Модуль отслеживает занятость постов выбранной автомойки и автоматически повышает цены при высокой нагрузке.</p>
+  <h2>Логика</h2>
+  <ul>
+    <li>Опрашивает <code>GET /api/crm/post-states</code> и считает занятые посты (как в модуле «Монитор занятости»).</li>
+    <li>Если занятых постов <strong>не меньше порога</strong> — сохраняет исходные цены и применяет повышение в процентах к каждому режиму, где цена &gt; 0.</li>
+    <li>Когда занятость падает ниже порога — восстанавливает сохранённые исходные цены.</li>
+    <li>Цены отправляются на посты через <code>message-processor</code> (MQTT + CRM).</li>
+  </ul>
+  <h2>Настройки</h2>
+  <ul>
+    <li><code>wash_id</code> — автомойка для мониторинга.</li>
+    <li><code>busy_threshold</code> — минимальное число занятых постов для включения повышения (например, 9 из 10).</li>
+    <li><code>price_increase_percent</code> — процент повышения (0–200).</li>
+    <li><code>poll_interval</code> — интервал опроса (15–3600 сек).</li>
+    <li><code>api_login</code> / <code>api_password</code> — учётные данные CRM для записи цен (по умолчанию сервисный аккаунт).</li>
+  </ul>
+  <h2>Логи и события</h2>
+  <p>События (<code>surge_activated</code>, <code>surge_deactivated</code>) пишутся в stdout PyOrchestrator и отображаются на вкладке <strong>Логи</strong>. История последних событий — в обзоре модуля и <code>data/pricing_state.json</code>.</p>
+  <h2>Запуск</h2>
+  <p>Требуется PyOrchestrator. После настройки автомойки и порога нажмите <strong>Запустить</strong> на карточке модуля.</p>
+</body>
+</html>

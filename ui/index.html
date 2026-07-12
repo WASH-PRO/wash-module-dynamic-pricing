@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Dynamic Pricing</title>
+  <link rel="stylesheet" href="wash-module-ui.css" />
+</head>
+<body class="wm-body">
+  <div id="wm-app"></div>
+  <script src="wash-module-sdk.js"></script>
+  <script>
+    function crmFetch(path) {
+      const token = localStorage.getItem('wash_crm_token') || '';
+      return fetch(path, {
+        headers: {
+          Accept: 'application/json',
+          ...(token ? { Authorization: 'Bearer ' + token } : {}),
+        },
+      }).then(function (res) {
+        return res.json().then(function (json) {
+          if (!res.ok || json.success === false) {
+            throw new Error(json.error || 'HTTP ' + res.status);
+          }
+          return json.data;
+        });
+      });
+    }
+
+    function refId(value) {
+      if (!value) return '';
+      if (typeof value === 'object') return String(value.id || value._id || '');
+      return String(value);
+    }
+
+    function updateBusyHint(total) {
+      const hint = document.getElementById('busy_threshold_hint');
+      const input = document.getElementById('busy_threshold');
+      if (!hint || !input) return;
+      const threshold = Number(input.value) || 0;
+      if (total > 0) {
+        hint.textContent = WashModule.t({
+          ru: 'Повышение включится, когда занято не меньше ' + threshold + ' из ' + total + ' постов.',
+          en: 'Surge activates when at least ' + threshold + ' of ' + total + ' posts are busy.',
+        });
+      } else {
+        hint.textContent = WashModule.t({
+          ru: 'Выберите автомойку — подсказка обновится по числу постов.',
+          en: 'Select a car wash to show post count hint.',
+        });
+      }
+    }
+
+    async function loadWashes(selectedId) {
+      const select = document.getElementById('wash_id');
+      if (!select) return;
+      select.innerHTML = '<option value="">' + WashModule.escapeHtml(WashModule.t({ ru: 'Загрузка…', en: 'Loading…' })) + '</option>';
+      try {
+        const washes = await crmFetch('/api/crm/washes?limit=200');
+        const posts = await crmFetch('/api/crm/posts?limit=500');
+        const postCountByWash = {};
+        (Array.isArray(posts) ? posts : []).forEach(function (post) {
+          const wid = refId(post.washId);
+          if (!wid) return;
+          postCountByWash[wid] = (postCountByWash[wid] || 0) + 1;
+        });
+        const options = ['<option value="">' + WashModule.escapeHtml(WashModule.t({ ru: '— выберите автомойку —', en: '— select car wash —' })) + '</option>'];
+        (Array.isArray(washes) ? washes : []).forEach(function (wash) {
+          const id = refId(wash.id || wash);
+          const name = wash.name || id;
+          const count = postCountByWash[id] || 0;
+          const label = name + (count ? ' (' + count + ')' : '');
+          const selected = id === selectedId ? ' selected' : '';
+          options.push('<option value="' + WashModule.escapeHtml(id) + '"' + selected + '>' + WashModule.escapeHtml(label) + '</option>');
+        });
+        select.innerHTML = options.join('');
+        const washId = select.value;
+        updateBusyHint(postCountByWash[washId] || 0);
+        select._postCountByWash = postCountByWash;
+      } catch (err) {
+        select.innerHTML = '<option value="">' + WashModule.escapeHtml(WashModule.t({ ru: 'Ошибка загрузки', en: 'Load failed' })) + '</option>';
+        console.error(err);
+      }
+    }
+
+    WashModule.createPage({
+      moduleId: 'dynamic-pricing',
+      accent: '#f59e0b',
+      refreshInterval: 10000,
+      title: { ru: 'Динамические цены', en: 'Dynamic pricing' },
+      subtitle: {
+        ru: 'Повышает цены постов при высокой занятости и возвращает исходные при снижении нагрузки.',
+        en: 'Raises post prices when occupancy is high and restores originals when it drops.',
+      },
+      settingsHtml: `
+        <div class="wm-field wm-field--full">
+          <label class="wm-field-label" for="wash_id">${WashModule.t({ ru: 'Автомойка', en: 'Car wash' })}</label>
+          <select class="wm-input" id="wash_id" name="wash_id"></select>
+          <span class="wm-field-hint">${WashModule.t({ ru: 'Модуль отслеживает занятость и цены только выбранной автомойки.', en: 'The module tracks occupancy and prices for the selected car wash only.' })}</span>
+        </div>
+        <div class="wm-field">
+          <label class="wm-field-label" for="busy_threshold">${WashModule.t({ ru: 'Порог занятости (постов)', en: 'Occupancy threshold (posts)' })}</label>
+          <input class="wm-input" id="busy_threshold" type="number" name="busy_threshold" min="1" max="100" />
+          <span class="wm-field-hint" id="busy_threshold_hint">${WashModule.t({ ru: 'Например: 9 — при 9 занятых постах из 10.', en: 'Example: 9 — when 9 of 10 posts are busy.' })}</span>
+        </div>
+        <div class="wm-field">
+          <label class="wm-field-label" for="price_increase_percent">${WashModule.t({ ru: 'Повышение цены (%)', en: 'Price increase (%)' })}</label>
+          <input class="wm-input" id="price_increase_percent" type="number" name="price_increase_percent" min="0" max="200" step="1" />
+          <span class="wm-field-hint">${WashModule.t({ ru: 'Добавляется к каждому режиму, где цена больше 0.', en: 'Applied to each mode where price is greater than 0.' })}</span>
+        </div>
+        <div class="wm-field">
+          <label class="wm-field-label" for="poll_interval">${WashModule.t({ ru: 'Интервал опроса (сек)', en: 'Poll interval (sec)' })}</label>
+          <input class="wm-input" id="poll_interval" type="number" name="poll_interval" min="15" max="3600" />
+          <span class="wm-field-hint">${WashModule.t({ ru: 'Как часто проверять занятость и применять цены.', en: 'How often to check occupancy and apply prices.' })}</span>
+        </div>
+        <div class="wm-field">
+          <label class="wm-field-label" for="api_login">${WashModule.t({ ru: 'Логин CRM API', en: 'CRM API login' })}</label>
+          <input class="wm-input" id="api_login" type="text" name="api_login" autocomplete="off" />
+          <span class="wm-field-hint">${WashModule.t({ ru: 'Сервисный аккаунт для записи цен на посты (по умолчанию service).', en: 'Service account for writing prices to posts (default: service).' })}</span>
+        </div>
+        <div class="wm-field wm-field--full">
+          <label class="wm-field-label" for="api_password">${WashModule.t({ ru: 'Пароль CRM API', en: 'CRM API password' })}</label>
+          <input class="wm-input" id="api_password" type="password" name="api_password" autocomplete="off" />
+          <span class="wm-field-hint">${WashModule.t({ ru: 'Оставьте пустым, чтобы не менять сохранённый пароль.', en: 'Leave empty to keep the saved password.' })}</span>
+        </div>`,
+      collectSettings(form) {
+        const password = String(form.api_password.value || '').trim();
+        const settings = {
+          wash_id: String(form.wash_id.value || '').trim(),
+          busy_threshold: Number(form.busy_threshold.value),
+          price_increase_percent: Number(form.price_increase_percent.value),
+          poll_interval: Number(form.poll_interval.value),
+          api_login: String(form.api_login.value || '').trim(),
+        };
+        if (password) settings.api_password = password;
+        return settings;
+      },
+      applySettings(settings, form) {
+        form.busy_threshold.value = settings.busy_threshold ?? 9;
+        form.price_increase_percent.value = settings.price_increase_percent ?? 10;
+        form.poll_interval.value = settings.poll_interval ?? 60;
+        form.api_login.value = settings.api_login ?? 'service';
+        if (settings.api_password) {
+          form.api_password.value = '';
+          form.api_password.placeholder = WashModule.t({ ru: '•••••••• (сохранён)', en: '•••••••• (saved)' });
+        }
+        loadWashes(settings.wash_id ?? '');
+      },
+      metrics(snap) {
+        if (!snap) return [];
+        return [
+          { label: WashModule.t({ ru: 'Занято', en: 'Busy' }), value: (snap.busyPosts ?? 0) + '/' + (snap.totalPosts ?? 0), accent: true },
+          {
+            label: WashModule.t({ ru: 'Порог', en: 'Threshold' }),
+            value: snap.busyThreshold ?? '—',
+          },
+          {
+            label: WashModule.t({ ru: 'Повышение', en: 'Surge' }),
+            value: snap.surgeActive ? '+' + (snap.priceIncreasePercent ?? 0) + '%' : WashModule.t({ ru: 'Выкл.', en: 'Off' }),
+            tone: snap.surgeActive ? 'accent' : undefined,
+          },
+          {
+            label: WashModule.t({ ru: 'Событие', en: 'Event' }),
+            value: snap.lastEvent || '—',
+          },
+        ];
+      },
+      renderOverview(snap) {
+        if (!snap) {
+          return `<div class="wm-empty">${WashModule.escapeHtml(WashModule.t({ ru: 'Нет снимка — запустите модуль.', en: 'No snapshot yet — start the module.' }))}</div>`;
+        }
+        const events = Array.isArray(snap.recentEvents) ? snap.recentEvents : [];
+        const eventsHtml = events.length
+          ? `<ul class="wm-list">${events.slice().reverse().map(function (e) {
+              return '<li><span class="wm-kv"><span>' + WashModule.escapeHtml(WashModule.formatDateTime(e.at)) + '</span><span class="wm-tag">' + WashModule.escapeHtml(String(e.type || '—')) + '</span></span><span class="wm-field-hint">' + WashModule.escapeHtml(String(e.message || '')) + '</span></li>';
+            }).join('')}</ul>`
+          : `<p class="wm-field-hint">${WashModule.t({ ru: 'Событий пока нет.', en: 'No events yet.' })}</p>`;
+        const status = snap.surgeActive
+          ? WashModule.t({ ru: 'Повышение активно', en: 'Surge active' })
+          : WashModule.t({ ru: 'Базовые цены', en: 'Base prices' });
+        return `
+          <h2 class="wm-section-title">${WashModule.t({ ru: 'Статус', en: 'Status' })}</h2>
+          <p>${WashModule.escapeHtml(status)} · ${WashModule.escapeHtml(String(snap.busyPosts ?? 0))}/${WashModule.escapeHtml(String(snap.totalPosts ?? 0))} ${WashModule.t({ ru: 'постов занято', en: 'posts busy' })}</p>
+          <h2 class="wm-section-title" style="margin-top:1rem">${WashModule.t({ ru: 'События', en: 'Events' })}</h2>
+          ${eventsHtml}
+          <h2 class="wm-section-title" style="margin-top:1rem">${WashModule.t({ ru: 'Снимок', en: 'Snapshot' })}</h2>
+          <pre class="wm-code">${WashModule.escapeHtml(JSON.stringify(snap, null, 2))}</pre>`;
+      },
+    });
+
+    document.addEventListener('change', function (event) {
+      const target = event.target;
+      if (!target || target.id !== 'wash_id') return;
+      const select = target;
+      const counts = select._postCountByWash || {};
+      updateBusyHint(counts[select.value] || 0);
+    });
+    document.addEventListener('input', function (event) {
+      const target = event.target;
+      if (!target || target.id !== 'busy_threshold') return;
+      const select = document.getElementById('wash_id');
+      const counts = (select && select._postCountByWash) || {};
+      updateBusyHint(counts[(select && select.value) || ''] || 0);
+    });
+  </script>
+</body>
+</html>
