@@ -5,7 +5,7 @@
     "ru": "Отправляет коэффициент списания в MQTT при высокой занятости (до обнуления баланса). Прайс-лист не меняется.",
     "en": "Sends MQTT debit coefficient when busy (until balance zero). Price list unchanged."
   },
-  "version": "1.1.1",
+  "version": "1.1.2",
   "author": "WASH-PRO",
   "license": "MIT",
   "category": "automation",
@@ -27,7 +27,7 @@
       "key": "busy_threshold",
       "type": "number",
       "label": { "ru": "Порог занятости (постов)", "en": "Occupancy threshold (posts)" },
-      "default": 9,
+      "default": 1,
       "min": 1,
       "max": 100
     },
@@ -37,7 +37,7 @@
       "label": { "ru": "Повышение списания (%)", "en": "Debit increase (%)" },
       "default": 10,
       "min": 0,
-      "max": 200
+      "max": 300
     },
     {
       "key": "poll_interval",

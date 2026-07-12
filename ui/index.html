@@ -33,6 +33,34 @@
       return String(value);
     }
 
+    function percentToCoeff(percent) {
+      const p = Number(percent);
+      if (!Number.isFinite(p)) return 1;
+      return Math.round((1 + Math.max(0, p) / 100) * 100) / 100;
+    }
+
+    function formatCoeff(value) {
+      const n = Number(value);
+      if (!Number.isFinite(n)) return '1';
+      return n.toFixed(2);
+    }
+
+    function updateCoeffPreview() {
+      const input = document.getElementById('price_increase_percent');
+      const preview = document.getElementById('coefficient_preview');
+      if (!input || !preview) return;
+      const percent = Number(input.value);
+      if (!Number.isFinite(percent)) {
+        preview.textContent = '';
+        return;
+      }
+      const k = formatCoeff(percentToCoeff(percent));
+      preview.textContent = WashModule.t({
+        ru: 'Коэффициент MQTT: ×' + k + ' (при ' + percent + '%)',
+        en: 'MQTT coefficient: ×' + k + ' (at ' + percent + '%)',
+      });
+    }
+
     function updateBusyHint(total) {
       const hint = document.getElementById('busy_threshold_hint');
       const input = document.getElementById('busy_threshold');
@@ -101,12 +129,13 @@
         <div class="wm-field">
           <label class="wm-field-label" for="busy_threshold">${WashModule.t({ ru: 'Порог занятости (постов)', en: 'Occupancy threshold (posts)' })}</label>
           <input class="wm-input" id="busy_threshold" type="number" name="busy_threshold" min="1" max="100" />
-          <span class="wm-field-hint" id="busy_threshold_hint">${WashModule.t({ ru: 'Например: 9 — при 9 занятых постах из 10.', en: 'Example: 9 — when 9 of 10 posts are busy.' })}</span>
+          <span class="wm-field-hint" id="busy_threshold_hint">${WashModule.t({ ru: 'Например: 1 — при 1 занятом посте.', en: 'Example: 1 — when 1 post is busy.' })}</span>
         </div>
         <div class="wm-field">
           <label class="wm-field-label" for="price_increase_percent">${WashModule.t({ ru: 'Повышение списания (%)', en: 'Debit increase (%)' })}</label>
-          <input class="wm-input" id="price_increase_percent" type="number" name="price_increase_percent" min="0" max="200" step="1" />
-          <span class="wm-field-hint">${WashModule.t({ ru: '10% → коэффициент 1.10 в MQTT set/surge. Действует на устройстве до обнуления баланса.', en: '10% → coefficient 1.10 via MQTT set/surge. Applied on device until balance zero.' })}</span>
+          <input class="wm-input" id="price_increase_percent" type="number" name="price_increase_percent" min="0" max="300" step="1" />
+          <span class="wm-field-hint" id="coefficient_preview"></span>
+          <span class="wm-field-hint">${WashModule.t({ ru: 'Формула: коэффициент = 1 + процент/100 (10% → ×1.10, 300% → ×4.00).', en: 'Formula: coefficient = 1 + percent/100 (10% → ×1.10, 300% → ×4.00).' })}</span>
         </div>
         <div class="wm-field">
           <label class="wm-field-label" for="poll_interval">${WashModule.t({ ru: 'Интервал опроса (сек)', en: 'Poll interval (sec)' })}</label>
@@ -135,7 +164,7 @@
         const settings = {
           wash_id: washId,
           busy_threshold: Number(form.busy_threshold.value),
-          price_increase_percent: Number(form.price_increase_percent.value),
+          price_increase_percent: Math.min(300, Math.max(0, Number(form.price_increase_percent.value))),
           poll_interval: Number(form.poll_interval.value),
           api_login: String(form.api_login.value || '').trim(),
         };
@@ -143,10 +172,11 @@
         return settings;
       },
       applySettings(settings, form) {
-        form.busy_threshold.value = settings.busy_threshold ?? 9;
+        form.busy_threshold.value = settings.busy_threshold ?? 1;
         form.price_increase_percent.value = settings.price_increase_percent ?? 10;
         form.poll_interval.value = settings.poll_interval ?? 60;
         form.api_login.value = settings.api_login ?? 'service';
+        updateCoeffPreview();
         if (settings.api_password) {
           form.api_password.value = '';
           form.api_password.placeholder = WashModule.t({ ru: '•••••••• (сохранён)', en: '•••••••• (saved)' });
@@ -163,7 +193,9 @@
           },
           {
             label: WashModule.t({ ru: 'Коэфф.', en: 'Coeff.' }),
-            value: snap.surgeActive ? '×' + (snap.surgeCoefficient ?? 1) : '×1',
+            value: snap.surgeActive
+              ? '×' + formatCoeff(percentToCoeff(snap.priceIncreasePercent ?? 0))
+              : '×1.00',
             tone: snap.surgeActive ? 'accent' : undefined,
           },
           {
@@ -208,10 +240,15 @@
     });
     document.addEventListener('input', function (event) {
       const target = event.target;
-      if (!target || target.id !== 'busy_threshold') return;
-      const select = document.getElementById('wash_id');
-      const counts = (select && select._postCountByWash) || {};
-      updateBusyHint(counts[(select && select.value) || ''] || 0);
+      if (!target) return;
+      if (target.id === 'busy_threshold') {
+        const select = document.getElementById('wash_id');
+        const counts = (select && select._postCountByWash) || {};
+        updateBusyHint(counts[(select && select.value) || ''] || 0);
+      }
+      if (target.id === 'price_increase_percent') {
+        updateCoeffPreview();
+      }
     });
   </script>
 </body>

@@ -37,7 +37,12 @@ class RuntimeConfig:
 
     @property
     def surge_coefficient(self) -> float:
-        return round(1 + max(0.0, self.price_increase_percent) / 100.0, 4)
+        return percent_to_coefficient(self.price_increase_percent)
+
+
+def percent_to_coefficient(percent: float) -> float:
+    """Процент повышения → MQTT-коэффициент: 10% → 1.10, 300% → 4.00."""
+    return round(1.0 + max(0.0, percent) / 100.0, 2)
 
 
 def log(message: str) -> None:
@@ -99,8 +104,11 @@ def load_runtime_config() -> RuntimeConfig:
         api_password = "ServiceInternal123!"
     return RuntimeConfig(
         wash_id=pick_str(settings, "wash_id", "WASH_ID"),
-        busy_threshold=max(1, int(pick_number(settings, "busy_threshold", "BUSY_THRESHOLD", 9))),
-        price_increase_percent=max(0.0, pick_number(settings, "price_increase_percent", "PRICE_INCREASE_PERCENT", 10)),
+        busy_threshold=max(1, int(pick_number(settings, "busy_threshold", "BUSY_THRESHOLD", 1))),
+        price_increase_percent=max(
+            0.0,
+            min(300.0, pick_number(settings, "price_increase_percent", "PRICE_INCREASE_PERCENT", 10)),
+        ),
         poll_interval=max(15, int(pick_number(settings, "poll_interval", "POLL_INTERVAL", 60))),
         api_login=pick_str(settings, "api_login", "API_LOGIN", "service") or "service",
         api_password=api_password,
@@ -378,7 +386,7 @@ def run_cycle(config: RuntimeConfig) -> int:
         state["surgeActive"] = True
         msg = (
             f"Surge MQTT sent: busy={busy_posts}/{total_posts}, "
-            f"k={coefficient} on {posts_updated} posts (until balance zero)"
+            f"+{config.price_increase_percent}% (k={coefficient}) on {posts_updated} posts"
         )
         add_event(
             state,

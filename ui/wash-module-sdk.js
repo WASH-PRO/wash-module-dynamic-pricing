@@ -271,6 +271,7 @@
 
     let lastStatus = null;
     let lastLogs = null;
+    let settingsDirty = false;
 
     async function loadLogs() {
       try {
@@ -315,7 +316,7 @@
         renderMetrics(els.metrics, cfg.metrics ? cfg.metrics(snap, lastStatus) : []);
         els.overview.innerHTML = cfg.renderOverview ? cfg.renderOverview(snap, lastStatus) : '';
 
-        if (cfg.applySettings && lastStatus.settings && els.form) {
+        if (cfg.applySettings && lastStatus.settings && els.form && !settingsDirty) {
           cfg.applySettings(lastStatus.settings, els.form);
         }
       } catch (err) {
@@ -329,6 +330,12 @@
     }
 
     if (els.form && cfg.collectSettings) {
+      els.form.addEventListener('input', function () {
+        settingsDirty = true;
+      });
+      els.form.addEventListener('change', function () {
+        settingsDirty = true;
+      });
       els.form.addEventListener('submit', async function (e) {
         e.preventDefault();
         els.saveBtn.disabled = true;
@@ -339,6 +346,7 @@
             body: JSON.stringify({ settings }),
           });
           els.saveBtn.textContent = t({ ru: 'Сохранено', en: 'Saved' });
+          settingsDirty = false;
           setTimeout(function () {
             els.saveBtn.textContent = t({ ru: 'Сохранить', en: 'Save' });
           }, 1600);
