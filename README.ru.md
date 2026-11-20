@@ -35,3 +35,7 @@
 ## Лицензия
 
 MIT
+
+---
+
+**Сайт:** [wash-pro.tech](https://wash-pro.tech) · **GitHub:** [WASH-PRO](https://github.com/WASH-PRO)
